@@ -1,0 +1,1 @@
+# home-assistant-vaillant-vsmart-NG-manual
