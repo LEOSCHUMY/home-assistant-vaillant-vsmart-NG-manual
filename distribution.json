@@ -1,0 +1,41 @@
+{
+  "source_repository": "LEOSCHUMY/home-assistant-vaillant-vsmart-NG",
+  "source_commit": "9cae81f1db731ce0daef938810fe8b59abaa16ba",
+  "source_dirty": false,
+  "status": "review_only_not_published",
+  "domain": "vaillant_vsmart",
+  "version": "0.1.2",
+  "requirements": [
+    "vaillant-netatmo-api-ng==0.3.0.dev0"
+  ],
+  "files_sha256": {
+    ".github/FUNDING.yml": "7a966984d5ff21a2c6ed6e3ea2412638bd0c79cf4082d3d59b9bc11c09070984",
+    ".github/workflows/verify.yml": "482379a4009a02c5de66cfcaddd6ff97b663d32d17134e794a40a826a6306e7d",
+    ".gitignore": "862263fa1f46c20f0d1e4dac5ffcc75abd55c08211b2c3864c5f8764b9d87793",
+    "CHANGELOG.md": "6d1c739a7b80b853404a0e2d17ac20c720b56d369f33db3ab2de248b4e82c02c",
+    "LICENSE": "cca51bb5b083a18a3430788c91c996a6eef5238f6a161d419e4ebaaa2b5aefb5",
+    "README.md": "6bd0869de12c31100b725e0af87500302c865ae3deaba7e7719a713a09e65237",
+    "custom_components/vaillant_vsmart/__init__.py": "34c39746263cfd1eca1f359af06b2e336f7699714e3f2c68d9b8c8534579d1a6",
+    "custom_components/vaillant_vsmart/boiler_status.py": "ff88f830b59919a7259957bec8c17ba143705b981cae21abfead94fb363a12c7",
+    "custom_components/vaillant_vsmart/brand/icon.png": "839429f7fdea18abf0553916c206ff4134dd48a6b56a25b404b0ea2a7a3a1c4a",
+    "custom_components/vaillant_vsmart/brand/icon@2x.png": "f7e45eaa6ebbb98a52c8c90b670ca4b7ece8a4a0af64596e48bf13c409adea54",
+    "custom_components/vaillant_vsmart/climate.py": "0679f5fbc5108de1ab45d70409f0585effce0940e168305aab3c7d4bd60e6566",
+    "custom_components/vaillant_vsmart/config_flow.py": "534501c2b6d6311fcd26e48a03cc079a3ef91d2abe5ed05483993bae7ff27b4a",
+    "custom_components/vaillant_vsmart/const.py": "5c1f5dc0d3c09287eec9389c2b977ea36e61cdbaf773a2e6dd9fc3f7405f1b2e",
+    "custom_components/vaillant_vsmart/entity.py": "8f12c141a46d437fb3592af6cf0d1c4dcf79faaa333550db015e850612c823f3",
+    "custom_components/vaillant_vsmart/manifest.json": "23aa77d6b367ad98f9a4969768c63b729e55eb1f2f12a3868a9985b40da3e9f9",
+    "custom_components/vaillant_vsmart/number.py": "03f7921cf99dc6cd230df0e5fe0b6d5a9d9dd63d4015dd56ae21d9e2ee1e33f8",
+    "custom_components/vaillant_vsmart/room_temperature.py": "7de798460d33732bf0bfd0e4202905b2a2251971023d2e208d43687443295575",
+    "custom_components/vaillant_vsmart/schedule.py": "90d2bac136503258743def8d035c3e2a172a3faa3f2d2f50ba9f41f3a4753d23",
+    "custom_components/vaillant_vsmart/select.py": "09dd2ed8f6cc6ef2b4d6366653e563f7a24d3039d4f771990a7cef99790be9ee",
+    "custom_components/vaillant_vsmart/sensor.py": "3d1b9fb0b0c09868b0c1a79e48d144de87b90927d8c6faf07924ec370e29173c",
+    "custom_components/vaillant_vsmart/switch.py": "469ff30a1995f897f40dc2ed2f68ce66aa4e580e69b568de2c743ef9bbed2325",
+    "custom_components/vaillant_vsmart/translations/en.json": "c89656ae9aeb20b6d94d1ce5045f5d7f49b1c5a586965ac61ddd20f17a207bb3",
+    "custom_components/vaillant_vsmart/translations/es.json": "735ccfe732c3d5050552f1eb29677f0769dde503fee444c2beb72451167f5856",
+    "custom_components/vaillant_vsmart/translations/fr.json": "7090cc52fbcad54f92a3f7925d3ba789fd074d6ae76f9a12bc800311be59c875",
+    "custom_components/vaillant_vsmart/translations/hr.json": "a42e0739755c7610b56ad3e84507d62372c77d20fe8e95d2dddaa9f21b61ff50",
+    "custom_components/vaillant_vsmart/translations/pl.json": "3a135efcede8ed5b302223a5e05e8c8657fe3b9415fef4211169396494513bf5",
+    "custom_components/vaillant_vsmart/water_heater.py": "483edcf7e394a9b34972e09a53301c0c90104fccde9266d1f736c96f9abda4f4",
+    "custom_components/vaillant_vsmart/websockets.py": "60f1dd8e3576bb70c6739fce13369e0faabc3d85f1402dcb34464687f76e0f2f"
+  }
+}
