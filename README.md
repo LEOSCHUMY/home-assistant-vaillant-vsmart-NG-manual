@@ -53,9 +53,9 @@ That observation is not a test of a compatible-domain upgrade. Prolonged polling
 
 ## Generated provenance
 
-- Source base commit: [4ce68bcaaf4733e217c836b354e2746028f4650b](https://github.com/LEOSCHUMY/home-assistant-vaillant-vsmart-NG/commit/4ce68bcaaf4733e217c836b354e2746028f4650b).
+- Source base commit: [2c975b9be29343f5927c9c3914ac8ec2447a5c3e](https://github.com/LEOSCHUMY/home-assistant-vaillant-vsmart-NG/commit/2c975b9be29343f5927c9c3914ac8ec2447a5c3e).
 - Source working tree modified at export: **no**.
-- Manifest version: `0.1.2` (this does not mean a release has been published).
+- Manifest version: `0.2.0` (this does not mean a release has been published).
 - `distribution.json` records the source identity, requirements and generated file hashes.
 
 The verification workflow checks these hashes and manifest consistency; runtime regression tests run in the main source repository. A dirty export is a local preview, not evidence of an exact committed source snapshot.
