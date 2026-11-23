@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -25,34 +25,38 @@ from vaillant_netatmo_api_ng import (
 )
 
 from .const import DOMAIN, SUPPORTED_ENERGY_MEASUREMENT_TYPES, SUPPORTED_DURATION_MEASUREMENT_TYPES
+from .devices import gateway_device_info, module_device_info
 from .room_temperature import resolve_room_temperatures
+from .room_setpoint import (
+    RoomSetpoint,
+    resolve_room_setpoints,
+    select_climate_setpoint,
+)
 from .boiler_status import resolve_boiler_statuses
+from .home_targeting import target_home, target_room
 
 UPDATE_INTERVAL = timedelta(minutes=5)
 
+UNKNOWN_PLACEMENT_ERROR = (
+    "Cannot tell which Vaillant home and room to send this command to: "
+    "the account's homes data must list the thermostat in exactly one room"
+)
+
 _LOGGER: logging.Logger = logging.getLogger(__package__)
-
-
-def _firmware_version(value: Any) -> str | None:
-    """Return firmware metadata as a string, preserving unknown values."""
-
-    return str(value) if value is not None else None
 
 
 class VaillantData:
     """Class holding data which coordinator provides to the entity."""
 
     def __init__(self, client: ThermostatClient, homes: list[Home], devices: list[Device],
-                 measurements: dict[(str, str, MeasurementType), MeasurementItem],
+                 measurements: dict[tuple[str, str, MeasurementType], MeasurementItem],
                  room_temperatures: dict[str, float] | None = None,
-                 boiler_statuses: dict[str, bool] | None = None) -> None:
+                 boiler_statuses: dict[str, bool] | None = None,
+                 room_setpoints: dict[str, RoomSetpoint] | None = None) -> None:
         """Initialize."""
 
         self.client = client
         self.homes = {home.id: home for home in homes}
-        self.rooms = {
-            room.id: room for home in homes for room in home.rooms
-        }
         self.devices = {device.id: device for device in devices}
         self.modules = {
             module.id: module for device in devices for module in device.modules
@@ -67,6 +71,7 @@ class VaillantData:
         # Keyed by thermostat module ID; no dependency on rooms[0] ordering.
         self.room_temperatures = room_temperatures if room_temperatures is not None else {}
         self.boiler_statuses = boiler_statuses if boiler_statuses is not None else {}
+        self.room_setpoints = room_setpoints if room_setpoints is not None else {}
 
 
 class VaillantCoordinator(DataUpdateCoordinator[VaillantData]):
@@ -85,7 +90,7 @@ class VaillantCoordinator(DataUpdateCoordinator[VaillantData]):
 
         self._client = client
 
-    async def _update_method(self):
+    async def _update_method(self) -> VaillantData:
         """Fetch data from API endpoint.
 
         This is the place to pre-process the data to lookup tables
@@ -119,6 +124,7 @@ class VaillantCoordinator(DataUpdateCoordinator[VaillantData]):
             boiler_statuses = resolve_boiler_statuses(
                 homes, devices, statuses_by_home, boiler_statuses_by_home
             )
+            room_setpoints = resolve_room_setpoints(homes, devices, statuses_by_home)
 
             # Diagnostic only: the climate entity uses precisely this lookup.
             # Log numeric temperatures and positional indices, never IDs,
@@ -153,6 +159,21 @@ class VaillantCoordinator(DataUpdateCoordinator[VaillantData]):
                             legacy_temperature,
                             chosen_temperature,
                         )
+                        room_setpoint = room_setpoints.get(module.id)
+                        selected = select_climate_setpoint(room_setpoint, module)
+                        _LOGGER.debug(
+                            "Vaillant setpoint source: thermostat_index=%d "
+                            "mode_source=%s selected_mode=%s "
+                            "target_source=%s selected_target=%s "
+                            "homestatus_mode=%s homestatus_target=%s",
+                            thermostat_index,
+                            selected.mode_source,
+                            selected.mode,
+                            selected.temperature_source,
+                            selected.temperature,
+                            getattr(room_setpoint, "mode", None),
+                            getattr(room_setpoint, "temperature", None),
+                        )
                         thermostat_index += 1
 
             date_begin = datetime.now() - timedelta(days=1)
@@ -186,7 +207,7 @@ class VaillantCoordinator(DataUpdateCoordinator[VaillantData]):
 
             return VaillantData(
                 self._client, homes, devices, measurements, room_temperatures,
-                boiler_statuses
+                boiler_statuses, room_setpoints
             )
         except RequestUnauthorizedException as ex:
             raise ConfigEntryAuthFailed from ex
@@ -202,7 +223,7 @@ class VaillantDeviceEntity(CoordinatorEntity[VaillantData]):
         self,
         coordinator: DataUpdateCoordinator[VaillantData],
         device_id: str,
-    ):
+    ) -> None:
         """Initialize."""
 
         super().__init__(coordinator)
@@ -211,29 +232,21 @@ class VaillantDeviceEntity(CoordinatorEntity[VaillantData]):
 
     @property
     def _client(self) -> ThermostatClient:
-        """Retrun the instance of the client which enables HTTP communication with the API."""
+        """Return the instance of the client which enables HTTP communication with the API."""
 
         return self.coordinator.data.client
 
     @property
     def _home(self) -> Home:
-        """Return the device which this entity represents."""
+        """Return the home that receives this device's commands."""
 
-        # TODO: Remove this hack
-        # We assume there is only one home and one room
-        # This assumption will be removed when we switch entirely to using new APIs
-        for id in self.coordinator.data.homes:
-            return self.coordinator.data.homes[id]
-
-    @property
-    def _room(self) -> Room:
-        """Return the device which this entity represents."""
-
-        # TODO: Remove this hack
-        # We assume there is only one home and one room
-        # This assumption will be removed when we switch entirely to using new APIs
-        for id in self.coordinator.data.rooms:
-            return self.coordinator.data.rooms[id]
+        home = target_home(
+            self.coordinator.data.homes.values(),
+            [module.id for module in self._device.modules],
+        )
+        if home is None:
+            raise HomeAssistantError(UNKNOWN_PLACEMENT_ERROR)
+        return home
 
     @property
     def _device(self) -> Device:
@@ -257,12 +270,7 @@ class VaillantDeviceEntity(CoordinatorEntity[VaillantData]):
     def device_info(self) -> dict[str, Any]:
         """Return all device info available for this entity."""
 
-        return {
-            "identifiers": {(DOMAIN, self._device.id)},
-            "name": self._device.station_name,
-            "sw_version": _firmware_version(self._device.firmware),
-            "manufacturer": self._device.type,
-        }
+        return gateway_device_info(self._device)
 
 
 class VaillantModuleEntity(CoordinatorEntity[VaillantData]):
@@ -273,7 +281,7 @@ class VaillantModuleEntity(CoordinatorEntity[VaillantData]):
         coordinator: DataUpdateCoordinator[VaillantData],
         device_id: str,
         module_id: str,
-    ):
+    ) -> None:
         """Initialize."""
 
         super().__init__(coordinator)
@@ -283,29 +291,27 @@ class VaillantModuleEntity(CoordinatorEntity[VaillantData]):
 
     @property
     def _client(self) -> ThermostatClient:
-        """Retrun the instance of the client which enables HTTP communication with the API."""
+        """Return the instance of the client which enables HTTP communication with the API."""
 
         return self.coordinator.data.client
 
     @property
     def _home(self) -> Home:
-        """Return the device which this entity represents."""
+        """Return the home that receives this module's commands."""
 
-        # TODO: Remove this hack
-        # We assume there is only one home and one room
-        # This assumption will be removed when we switch entirely to using new APIs
-        for id in self.coordinator.data.homes:
-            return self.coordinator.data.homes[id]
+        home = target_home(self.coordinator.data.homes.values(), [self._module_id])
+        if home is None:
+            raise HomeAssistantError(UNKNOWN_PLACEMENT_ERROR)
+        return home
 
     @property
     def _room(self) -> Room:
-        """Return the device which this entity represents."""
+        """Return the room that receives this module's commands."""
 
-        # TODO: Remove this hack
-        # We assume there is only one home and one room
-        # This assumption will be removed when we switch entirely to using new APIs
-        for id in self.coordinator.data.rooms:
-            return self.coordinator.data.rooms[id]
+        room = target_room(self.coordinator.data.homes.values(), self._module_id)
+        if room is None:
+            raise HomeAssistantError(UNKNOWN_PLACEMENT_ERROR)
+        return room
 
     @property
     def _device(self) -> Device:
@@ -335,13 +341,9 @@ class VaillantModuleEntity(CoordinatorEntity[VaillantData]):
     def device_info(self) -> dict[str, Any]:
         """Return all device info available for this entity."""
 
-        return {
-            "identifiers": {(DOMAIN, self._module.id)},
-            "name": self._module.module_name,
-            "sw_version": _firmware_version(self._module.firmware),
-            "manufacturer": self._device.type,
-            "via_device": (DOMAIN, self._device.id),
-        }
+        return module_device_info(
+            self.hass, self.coordinator.config_entry.entry_id, self._device, self._module
+        )
 
 
 class VaillantProgramEntity(CoordinatorEntity[VaillantData]):
@@ -353,7 +355,7 @@ class VaillantProgramEntity(CoordinatorEntity[VaillantData]):
         device_id: str,
         module_id: str,
         program_id: str,
-    ):
+    ) -> None:
         """Initialize."""
 
         super().__init__(coordinator)
@@ -364,7 +366,7 @@ class VaillantProgramEntity(CoordinatorEntity[VaillantData]):
 
     @property
     def _client(self) -> ThermostatClient:
-        """Retrun the instance of the client which enables HTTP communication with the API."""
+        """Return the instance of the client which enables HTTP communication with the API."""
 
         return self.coordinator.data.client
 
@@ -402,13 +404,9 @@ class VaillantProgramEntity(CoordinatorEntity[VaillantData]):
     def device_info(self) -> dict[str, Any]:
         """Return all device info available for this entity."""
 
-        return {
-            "identifiers": {(DOMAIN, self._module.id)},
-            "name": self._module.module_name,
-            "sw_version": _firmware_version(self._module.firmware),
-            "manufacturer": self._device.type,
-            "via_device": (DOMAIN, self._device.id),
-        }
+        return module_device_info(
+            self.hass, self.coordinator.config_entry.entry_id, self._device, self._module
+        )
 
 
 class VaillantMeasurementEntity(CoordinatorEntity[VaillantData]):
@@ -420,7 +418,7 @@ class VaillantMeasurementEntity(CoordinatorEntity[VaillantData]):
         device_id: str,
         module_id: str,
         measurement_type: MeasurementType,
-    ):
+    ) -> None:
         """Initialize."""
 
         super().__init__(coordinator)
@@ -431,7 +429,7 @@ class VaillantMeasurementEntity(CoordinatorEntity[VaillantData]):
 
     @property
     def _client(self) -> ThermostatClient:
-        """Retrun the instance of the client which enables HTTP communication with the API."""
+        """Return the instance of the client which enables HTTP communication with the API."""
 
         return self.coordinator.data.client
 
@@ -475,10 +473,6 @@ class VaillantMeasurementEntity(CoordinatorEntity[VaillantData]):
     def device_info(self) -> dict[str, Any]:
         """Return all device info available for this entity."""
 
-        return {
-            "identifiers": {(DOMAIN, self._module.id)},
-            "name": self._module.module_name,
-            "sw_version": _firmware_version(self._module.firmware),
-            "manufacturer": self._device.type,
-            "via_device": (DOMAIN, self._device.id),
-        }
+        return module_device_info(
+            self.hass, self.coordinator.config_entry.entry_id, self._device, self._module
+        )
